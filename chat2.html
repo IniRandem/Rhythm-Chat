@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Rhythm Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        :root {
+            --wa-green: #075e54;
+            --wa-light: #25d366;
+            --wa-bg: #e5ddd5;
+            --wa-bubble-me: #dcf8c6;
+            --wa-bubble-npc: #ffffff;
+            --phone-frame: #1f1f1f;
+        }
+
+        body {
+            margin: 0; background: #0a0a0a; color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden;
+        }
+
+        #flash-layer {
+            position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0;
+        }
+
+        .phone {
+            width: 380px; height: 820px; background: #000;
+            border: 12px solid var(--phone-frame); border-radius: 55px;
+            position: relative; overflow: hidden; display: flex; flex-direction: column;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.8), inset 0 0 15px rgba(255,255,255,0.1);
+            transition: transform 0.1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+        }
+
+        .camera {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            width: 100px; height: 25px; background: #000; border-radius: 20px; z-index: 1000;
+        }
+
+        .status-bar { 
+            height: 40px; background: var(--wa-green); padding: 10px 25px 0; 
+            display: flex; justify-content: space-between; font-size: 13px; font-weight: 600;
+        }
+
+        .screen { display: none; width: 100%; height: calc(100% - 95px); flex-direction: column; position: relative; }
+        .active { display: flex; }
+
+        #home-screen { background: linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url('https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&w=400&h=800') center/cover; }
+        .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); padding: 60px 25px; gap: 20px; }
+        .app { display: flex; flex-direction: column; align-items: center; cursor: pointer; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5)); }
+        .app-icon { width: 60px; height: 60px; border-radius: 16px; margin-bottom: 8px; display: flex; justify-content: center; align-items: center; font-size: 32px; transition: transform 0.2s; }
+        .app:active .app-icon { transform: scale(0.9); }
+
+        .wa-header { background: var(--wa-green); padding: 15px; display: flex; align-items: center; gap: 12px; z-index: 10; }
+        .wa-avatar { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); }
+        #chat-flow { 
+            flex: 1; padding: 15px; overflow-y: auto; 
+            background: #e5ddd5 url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
+            display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth;
+        }
+        
+        .bubble { 
+            max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14.5px; color: #000; 
+            position: relative; line-height: 1.4; box-shadow: 0 2px 2px rgba(0,0,0,0.1);
+            animation: pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .npc { align-self: flex-start; background: var(--wa-bubble-npc); border-top-left-radius: 0; }
+        .me { align-self: flex-end; background: var(--wa-bubble-me); border-top-right-radius: 0; }
+        .tick { font-size: 11px; color: #34b7f1; float: right; margin-top: 4px; margin-left: 6px; }
+
+        .wa-footer { background: #f0f0f0; padding: 12px; display: flex; align-items: center; gap: 10px; }
+        .input-box { 
+            flex: 1; background: white; border-radius: 25px; padding: 10px 20px; 
+            color: #666; font-size: 14px; border: 3px solid transparent; transition: 0.1s;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .beat-active { border-color: var(--wa-light); box-shadow: 0 0 20px rgba(37, 211, 102, 0.4); background: #f9fff9; color: #000; }
+        .beat-hold { border-color: #ff9900; box-shadow: 0 0 20px rgba(255, 153, 0, 0.4); background: #fff9e6; color: #000; }
+
+        #music-app { background: #fff; color: #111; padding: 50px 25px; }
+        .player-card { background: #f0f2f5; padding: 40px 20px; border-radius: 35px; text-align: center; border: 1px solid #ddd; }
+        
+        .nav-bar { height: 55px; background: #000; display: flex; justify-content: space-around; align-items: center; padding-bottom: 5px; }
+        .nav-item { width: 60px; text-align: center; cursor: pointer; font-size: 20px; color: #555; transition: 0.2s; }
+
+        #result-screen { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.92); z-index: 2000; flex-direction: column; justify-content: center; align-items: center; }
+        .res-box { background: white; padding: 40px 30px; border-radius: 40px; color: #222; width: 80%; text-align: center; }
+
+        .hit-label { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 4rem; font-weight: 900; pointer-events: none; z-index: 3000; text-transform: uppercase; }
+
+        @keyframes pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -300%) scale(1.5); } }
+        @keyframes flashEffect { 0% { opacity: 0.5; } 100% { opacity: 0; } }
+        @keyframes phoneBop { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+<div id="flash-layer"></div>
+
+<div class="phone" id="phone-body">
+    <div class="camera"></div>
+    <div class="status-bar"><span>09:25</span><span>📶 🔋</span></div>
+    <div id="hit-fb" class="hit-label"></div>
+
+    <div id="result-screen">
+        <div class="res-box">
+            <h1 id="resIcon" style="font-size: 6rem; margin: 0;">💼</h1>
+            <h2 id="resTitle" style="margin: 15px 0; letter-spacing: -1px;">Hasil</h2>
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 20px; margin: 20px 0; border: 1px solid #eee;">
+                <p style="margin: 5px 0;">PERFECT: <b id="perfStat" style="color: var(--wa-light); font-size: 20px;">0</b></p>
+                <p style="margin: 5px 0;">TYPO/MISS: <b id="typoStat" style="color: #ff453a; font-size: 20px;">0</b></p>
+            </div>
+            <h3 id="salaryRes" style="margin-bottom: 25px;"></h3>
+            <button onclick="location.reload()" style="width: 100%; padding: 18px; background: #000; border: none; color: white; border-radius: 25px; font-weight: 800; cursor: pointer; text-transform: uppercase;">Hapus cache</button>
+        </div>
+    </div>
+
+    <div id="home-screen" class="screen active">
+        <div class="app-grid">
+            <div class="app" onclick="openApp('music-app')">
+                <div class="app-icon" style="background: linear-gradient(45deg, #ff5e62, #ff9966);">🎵</div>
+                <span style="font-size: 13px; font-weight: 600;">Music</span>
+            </div>
+            <div class="app" onclick="openApp('chat-app')">
+                <div class="app-icon" style="background: #25d366;">🟢</div>
+                <span style="font-size: 13px; font-weight: 600;">WhatsApp</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="music-app" class="screen">
+        <div class="player-card">
+            <div id="vinyl" style="width: 180px; height: 180px; background: #111; border-radius: 50%; margin: 0 auto 30px; border: 10px solid #fff; display: flex; justify-content: center; align-items: center; box-shadow: 0 15px 30px rgba(0,0,0,0.15);">
+                <div style="width: 50px; height: 50px; background: #333; border-radius: 50%; border: 2px solid #555;"></div>
+            </div>
+            <h3 style="margin: 0 0 5px 0;">Konfigurasi</h3>
+            <p style="color: #888; font-size: 13px; margin-bottom: 25px;">Pilih lagu</p>
+            <input type="file" id="audioSrc" accept="audio/*" style="font-size: 12px; margin-bottom: 25px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px; border-radius: 20px; border: 1px solid #ddd;">
+                <span style="font-weight: 700;">BPM:</span>
+                <input type="number" id="bpmVal" value="120" style="width: 70px; border: none; font-size: 18px; font-weight: 900; text-align: center; color: var(--wa-green);">
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-app" class="screen">
+        <div class="wa-header">
+            <div class="wa-avatar"><img src="icon.png" style="width:100%; border-radius:50%;"></div>
+            <div style="flex:1">
+                <div style="font-weight: 700; font-size: 16px;">Pak Rendem (Boss)</div>
+                <div style="font-size: 12px; opacity: 0.9;">online</div>
+            </div>
+        </div>
+        <div id="chat-flow"></div>
+        <div class="wa-footer">
+            <div id="input-pill" class="input-box">
+                <span id="hint">Mengetik...</span>
+                <span>📎 📷</span>
+            </div>
+            <div style="width: 45px; height: 45px; background: var(--wa-green); border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-size: 20px;">🎤</div>
+        </div>
+    </div>
+
+    <div class="nav-bar">
+        <div class="nav-item" onclick="openApp('music-app')">◀</div>
+        <div class="nav-item" onclick="openApp('home-screen')">●</div>
+        <div class="nav-item" onclick="location.reload()">■</div>
+    </div>
+</div>
+
+<audio id="player"></audio>
+
+<script>
+let audioCtx, bpm, beatSec, currentBeat = -1, hasHit = false, STATE = "home";
+let convoIdx = 0, score = { p: 0, t: 0, m: 0 };
+let sfx = {};
+// Telpon
+let isCallMode = false, isHoldingK = false, callPerfect = false, isFailedHold = false; 
+
+// Double chat
+let isDoubleChat = false;
+let doubleHitsInBar = [false, false];
+
+const player = document.getElementById("player");
+const phoneBody = document.getElementById("phone-body");
+const flashLayer = document.getElementById("flash-layer");
+
+const dialogue = [
+    { n: "Laporan bulan ini mana?", m: "Sudah bos, cek email." },
+    { n: "Data sales kok turun?", m: "Iya bos, pasar lagi adalah pokoknya." },
+    { n: "Revisi desain jam 4 harus ada!", m: "Siap bos, otw." },
+    { n: "Kamu lembur ya hari ini.", m: "Oh baik Pak." },
+    { n: "Kirim invoice ke klien yang di Solo sana.", m: "Oalah oke bos sip saya kirim nanti." },
+    { n: "Perhatiin typo mu itu", m: "Maaf bos, segera ganti." },
+    { n: "Sudah dikerjakan blom?", m: "Sudah pak, coba cek email." },
+    { n: "Absen udah jalan kan?", m: "Iya aman pak." },
+    { n: "Tolong panggilin Jonatan suruh ke ruangan saya ya.", m: "Oke saya sampaikan." },
+    { n: "Kok OB nya di kunciin??", m: "EH IYA, LUPA BOS MAAF" },
+    { n: "Kirim kerjaan kemarin sore ke saya ya", m: "Sudah bos, barusan udah saya kirim kok." },
+    { n: "Masukin data sale kemarin", m: "OTW Pak." },
+    { n: "Nanti ada meeting ya jam 4", m: "Okay noted pak." },
+    { n: "Coba anuin yang data kemarin dong", m: "Oke bisa bisa boss, saya segerakan." },
+    { n: "Kenapa kalo saya minta Deni ke ruangan saya, selalu lama. Bisa tolong panggilin ga kamu?", m: "Oalah kalo itu kurang tau pak, nanti saya sampaikan ya pak." },
+    { n: "Kamu kalo pulang lembur lampu ga dimatiin ya? Tagihan listrik naik!", m: "Lupa pak... hehe." },
+    { n: "Tolong catet jam 1 nanti ada pertemuan ama Pak Nopal setelah Konferensi Pers nya.", m: "Oke pak, saya catat." },
+    { n: "Bisa ke kantor?", m: "Baik pak." },
+    { n: "Kok jendela kantor terbuka?", m: "Mungkin Ilusi pak?" },
+    { n: "Tolong di anuin biar itu kek apa kali nanti ya", m: "Siap saya kerjakan segera" },
+    { n: "Di jam 2 saya ada pertemuan dengan siapa ya?", m: "Dengan Bu Meisha pak" },
+    { n: "AC rusak lagi ya? keluhan dari anak anak.", m: "Duh keknya sih pak, saya cek dulu ya" },
+    { n: "Tadi di notulen pertemuan dengan Pak Fadli kapan yah?", m: "Jam 4 pak" },
+    { n: "Siapa yang rusakin toilet kantor?", m: "Waduh kurang tau pak" },
+    { n: "Bisa catat notulen rapat nanti?", m: "Baik pak." }
+];
+
+async function start() {
+    const file = document.getElementById("audioSrc").files[0];
+    if(!file) { alert("Pilih lagu dulu!"); openApp('home-screen'); return; }
+    
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const load = async (n, u) => { 
+            try {
+                const r = await fetch(u); const b = await r.arrayBuffer(); 
+                sfx[n] = await audioCtx.decodeAudioData(b);
+            } catch(e) { console.log("SFX skip: " + n); }
+        };
+        await load('cue', 'cue.mp3'); 
+        await load('clap', 'clap.mp3'); 
+        await load('geter', 'geter.wav');
+        await load('reject', 'reject.mp3'); 
+        await load('ping', 'ping.mp3'); 
+    }
+    
+    bpm = parseInt(document.getElementById("bpmVal").value) || 120;
+    beatSec = 60 / bpm;
+    player.src = URL.createObjectURL(file);
+    player.play();
+    STATE = "playing";
+    gameLoop();
+}
+
+function openApp(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if(id === 'chat-app') start();
+}
+
+function triggerFlash(color) {
+    flashLayer.style.background = color;
+    flashLayer.style.animation = 'none';
+    void flashLayer.offsetWidth;
+    flashLayer.style.animation = 'flashEffect 0.2s ease-out';
+}
+
+function bopPhone() {
+    phoneBody.style.animation = 'none';
+    void phoneBody.offsetWidth;
+    phoneBody.style.animation = 'phoneBop 0.15s ease-out';
+}
+
+function playSFX(name) {
+    if(sfx[name]) {
+        const s = audioCtx.createBufferSource();
+        s.buffer = sfx[name];
+        s.connect(audioCtx.destination);
+        s.start(0);
+    }
+}
+
+function gameLoop() {
+    if(STATE !== "playing") return;
+    const t = player.currentTime;
+    const beat = Math.floor(t / beatSec);
+    const m = beat % 4;
+
+    if(beat !== currentBeat) {
+        if(m === 0 && currentBeat !== -1) {
+            if(isCallMode) {
+                if(!callPerfect) { processTypo(); addMsg("ANGKAT TELPON SAYA!!!", "npc"); }
+                else { playSFX('reject'); popLabel("Accepted", "#ff9900"); addMsg("📞 DITERIMA", "me"); score.p++; }
+            } else if(isDoubleChat) {
+                if(!doubleHitsInBar[0] || !doubleHitsInBar[1]) { 
+                    popLabel("MISS", "#999"); score.m++; 
+                    addMsg("Ga sopan kamu.", "npc");
+                }
+            } else if(!hasHit && (currentBeat % 4) === 3) {
+                popLabel("MISS", "#999"); score.m++; addMsg("Halo?", "npc"); 
+            }
+        }
+
+        currentBeat = beat;
+        bopPhone();
+
+        if(m === 0) {
+            hasHit = false; callPerfect = false; isFailedHold = false;
+            doubleHitsInBar = [false, false];
+            isDoubleChat = Math.random() < 0.3; 
+            isCallMode = !isDoubleChat && Math.random() < 0.2; 
+            
+            if(isCallMode) addMsg("📞 MEMANGGIL...", "npc");
+            else {
+                if(isDoubleChat) playSFX('ping');
+                addMsg(isDoubleChat ? "Halo" : dialogue[convoIdx % dialogue.length].n, "npc");
+            }
+        }
+
+        if(isDoubleChat && m === 1) { playSFX('ping'); addMsg("Mas", "npc"); }
+        
+        const pill = document.getElementById("input-pill");
+        const hint = document.getElementById("hint");
+        pill.classList.remove("beat-active", "beat-hold");
+
+        if(isCallMode) {
+            if(m < 2) { playSFX('geter'); hint.innerText = " "; }
+            else { pill.classList.add("beat-hold"); hint.innerText = "Ketik Pesan"; }
+        } else if(isDoubleChat) {
+            if(m < 2) hint.innerText = "Mengetik...";
+            else { pill.classList.add("beat-active"); hint.innerText = "Kirim Pesan"; }
+        } else {
+            if(m < 3) { playSFX('cue'); hint.innerText = "Mengetik..."; }
+            else { pill.classList.add("beat-active"); hint.innerText = "Kirim Pesan"; }
+        }
+    }
+
+    if(isCallMode && (m === 2 || m === 3)) {
+        if(!isHoldingK) { isFailedHold = true; callPerfect = false; }
+        else if(!isFailedHold) callPerfect = true;
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+function hit() {
+    if(STATE !== "playing" || isCallMode) return;
+    const t = player.currentTime;
+    const preciseM = (t / beatSec) % 4;
+
+    if(isDoubleChat) {
+        let target3 = (Math.floor(t / (beatSec * 4)) * (beatSec * 4)) + (beatSec * 2);
+        let target4 = (Math.floor(t / (beatSec * 4)) * (beatSec * 4)) + (beatSec * 3);
+        let diff3 = Math.abs(t - target3);
+        let diff4 = Math.abs(t - target4);
+
+        if(diff3 < 0.3 && !doubleHitsInBar[0]) {
+            doubleHitsInBar[0] = true;
+            processPerfectHit(2);
+        } else if(diff4 < 0.3 && !doubleHitsInBar[1]) {
+            doubleHitsInBar[1] = true;
+            processPerfectHit(3);
+            if(doubleHitsInBar[0]) { convoIdx++; score.p++; }
+        } else if (preciseM > 1.8) {
+             processTypo();
+        }
+    } else if(!hasHit) {
+        let target = (Math.floor(t / (beatSec * 4)) * (beatSec * 4)) + (beatSec * 3);
+        let diff = Math.abs(t - target);
+        if (diff < 0.25) {
+            hasHit = true;
+            processPerfectHit();
+            convoIdx++; score.p++;
+        } else if (preciseM > 2.7) {
+            hasHit = true;
+            processTypo();
+        }
+    }
+}
+
+function processPerfectHit(mVal) {
+    popLabel("PERFECT", "#25d366");
+    triggerFlash('rgba(255, 255, 255, 0.4)');
+    playSFX('clap');
+    if(isDoubleChat) addMsg(mVal === 2 ? "Iya pak" : "Ada apa?", "me");
+    else addMsg(dialogue[convoIdx % dialogue.length].m, "me");
+}
+
+function processTypo() {
+    popLabel("TYPO", "#ff453a");
+    triggerFlash('rgba(255, 0, 0, 0.4)');
+    addMsg("asdfghjkl", "me");
+    setTimeout(() => addMsg("Ngomong apa sih?", "npc"), 600);
+    score.t++;
+}
+
+function popLabel(txt, color) {
+    const l = document.getElementById("hit-fb");
+    l.innerText = txt; l.style.color = color;
+    l.style.animation = 'none'; void l.offsetWidth;
+    l.style.animation = 'floatUp 0.6s ease-out forwards';
+}
+
+function addMsg(t, s) {
+    const f = document.getElementById("chat-flow");
+    const d = document.createElement("div");
+    d.className = `bubble ${s}`;
+    d.innerHTML = t + (s === 'me' ? '<span class="tick">✔✔</span>' : '');
+    f.appendChild(d); f.scrollTop = f.scrollHeight;
+}
+
+window.addEventListener("keydown", e => { 
+    if(e.code === "KeyJ") hit(); 
+    if(e.code === "KeyK") isHoldingK = true;
+});
+window.addEventListener("keyup", e => {
+    if(e.code === "KeyK") isHoldingK = false;
+});
+</script>
+</body>
+</html>
